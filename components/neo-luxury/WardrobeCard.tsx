@@ -5,6 +5,7 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
+  FadeIn,
 } from 'react-native-reanimated';
 import { Colors, Typography, Spacing } from '@/constants/theme';
 import { useHaptics } from '@/hooks/useHaptics';
@@ -14,9 +15,10 @@ interface Props {
   item: WardrobeItem;
   height: number;
   onPress?: (item: WardrobeItem) => void;
+  onLongPress?: (item: WardrobeItem) => void;
 }
 
-export const WardrobeCard: React.FC<Props> = ({ item, height, onPress }) => {
+export const WardrobeCard: React.FC<Props> = ({ item, height, onPress, onLongPress }) => {
   const haptics = useHaptics();
   const scale = useSharedValue(1);
 
@@ -33,12 +35,19 @@ export const WardrobeCard: React.FC<Props> = ({ item, height, onPress }) => {
     scale.value = withSpring(1, { damping: 15, stiffness: 300 });
   }, []);
 
+  const handleLongPress = useCallback(() => {
+    haptics.medium();
+    onLongPress?.(item);
+  }, [item, onLongPress]);
+
   return (
-    <Animated.View style={[styles.card, animatedStyle]}>
+    <Animated.View entering={FadeIn.duration(250)} style={[styles.card, animatedStyle]}>
       <Pressable
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
         onPress={() => onPress?.(item)}
+        onLongPress={handleLongPress}
+        delayLongPress={380}
         style={{ flex: 1 }}
       >
         <Image
