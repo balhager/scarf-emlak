@@ -19,7 +19,8 @@
     },
     "plugins": [
       "expo-router",
-      "react-native-reanimated"
+      "react-native-reanimated",
+      ["expo-image-picker", { "photosPermission": "Allow Vestiarch to access your photos to add wardrobe items." }]
     ],
     "experiments": {
       "typedRoutes": true
