@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, Alert, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { Dimensions } from 'react-native';
@@ -23,18 +23,25 @@ export const ItemDetailSheet: React.FC<Props> = ({ item, onClose }) => {
   const markAsWorn = useWardrobeStore((s) => s.markAsWorn);
   const addToCanvas = useCanvasStore((s) => s.addToCanvas);
 
+  // Local optimistic worn count so the UI updates instantly without waiting for store propagation
+  const [localWornCount, setLocalWornCount] = useState(item?.wornCount ?? 0);
+  useEffect(() => {
+    setLocalWornCount(item?.wornCount ?? 0);
+  }, [item?.id]);
+
   const handleAddToCanvas = useCallback(() => {
     if (!item) return;
     haptics.medium();
     addToCanvas(item.id, item.imageUri);
     onClose();
-  }, [item]);
+  }, [item, addToCanvas, onClose, haptics]);
 
   const handleMarkWorn = useCallback(() => {
     if (!item) return;
     haptics.light();
     markAsWorn(item.id);
-  }, [item]);
+    setLocalWornCount((n) => n + 1);
+  }, [item, markAsWorn, haptics]);
 
   const handleRemove = useCallback(() => {
     if (!item) return;
@@ -50,9 +57,8 @@ export const ItemDetailSheet: React.FC<Props> = ({ item, onClose }) => {
         },
       },
     ]);
-  }, [item]);
+  }, [item, removeItem, onClose, haptics]);
 
-  const wornCount = item?.wornCount ?? 0;
   const addedDate = item
     ? new Date(item.addedAt).toLocaleDateString('en-US', {
         month: 'long',
@@ -87,10 +93,10 @@ export const ItemDetailSheet: React.FC<Props> = ({ item, onClose }) => {
               <View style={styles.chip}>
                 <Text style={styles.chipText}>{item.color.toUpperCase()}</Text>
               </View>
-              {wornCount > 0 && (
+              {localWornCount > 0 && (
                 <View style={[styles.chip, styles.wornChip]}>
                   <Text style={[styles.chipText, { color: Colors.accent }]}>
-                    WORN ×{wornCount}
+                    WORN ×{localWornCount}
                   </Text>
                 </View>
               )}
@@ -107,7 +113,7 @@ export const ItemDetailSheet: React.FC<Props> = ({ item, onClose }) => {
             <Pressable style={styles.wornBtn} onPress={handleMarkWorn}>
               <CheckCheck size={13} color={Colors.muted} strokeWidth={1.5} />
               <Text style={styles.wornBtnText}>
-                {wornCount === 0 ? 'MARK AS WORN' : `WORN AGAIN  ×${wornCount}`}
+                {localWornCount === 0 ? 'MARK AS WORN' : `WORN AGAIN  ×${localWornCount}`}
               </Text>
             </Pressable>
 
@@ -207,11 +213,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 2,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,80,80,0.25)',
+    borderColor: Colors.warningBorder,
   },
   destructiveBtnText: {
     ...Typography.label,
-    color: 'rgba(255,80,80,0.6)',
+    color: Colors.warning,
     fontSize: 10,
   },
 });

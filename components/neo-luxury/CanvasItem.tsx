@@ -36,7 +36,8 @@ export const CanvasItem: React.FC<Props> = ({ item }) => {
       startY.value = translateY.value;
       runOnJS(bringToFront)(item.id);
       runOnJS(setActiveItem)(item.id);
-      runOnJS(haptics.light)();
+      // Arrow-function wrapper prevents 'this' context loss on the UI thread
+      runOnJS(() => haptics.light())();
     })
     .onUpdate((e) => {
       translateX.value = startX.value + e.translationX;
@@ -55,7 +56,7 @@ export const CanvasItem: React.FC<Props> = ({ item }) => {
     })
     .onEnd(() => {
       runOnJS(updateScale)(item.id, scale.value);
-      runOnJS(haptics.light)();
+      runOnJS(() => haptics.light())();
     });
 
   const combinedGesture = Gesture.Simultaneous(panGesture, pinchGesture);
@@ -71,7 +72,7 @@ export const CanvasItem: React.FC<Props> = ({ item }) => {
   const handleDelete = useCallback(() => {
     haptics.heavy();
     removeFromCanvas(item.id);
-  }, [item.id, removeFromCanvas]);
+  }, [item.id, removeFromCanvas, haptics]);
 
   return (
     <Animated.View style={[styles.outerContainer, animatedStyle, { zIndex: item.zIndex }]}>
@@ -81,8 +82,8 @@ export const CanvasItem: React.FC<Props> = ({ item }) => {
         </View>
       </GestureDetector>
 
-      {/* Delete button — outside GestureDetector so it receives press events */}
-      <Pressable style={styles.deleteBtn} onPress={handleDelete} hitSlop={6}>
+      {/* Delete button sits outside GestureDetector to receive its own press events */}
+      <Pressable style={styles.deleteBtn} onPress={handleDelete} hitSlop={8}>
         <View style={styles.deleteDot}>
           <X size={9} color={Colors.background} strokeWidth={2.5} />
         </View>

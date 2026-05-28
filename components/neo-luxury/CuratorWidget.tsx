@@ -1,8 +1,9 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Typography, Spacing } from '@/constants/theme';
+import { useWardrobeStore, type WardrobeItem } from '@/store/wardrobeStore';
 
-const CURATOR_EDITORIALS = [
+const FALLBACK_EDITORIALS = [
   {
     headline: 'THE QUIET LUXURY SHIFT',
     body: 'This season, your wardrobe signals restraint. The overcoat and wide-leg trouser speak louder than any logo ever could.',
@@ -33,11 +34,67 @@ const CURATOR_EDITORIALS = [
   },
 ];
 
-const getEditorial = () =>
-  CURATOR_EDITORIALS[new Date().getDay() % CURATOR_EDITORIALS.length];
+function getPersonalizedEditorial(items: WardrobeItem[]): { headline: string; body: string } {
+  const day = new Date().getDay();
+
+  if (items.length === 0) {
+    return FALLBACK_EDITORIALS[day % FALLBACK_EDITORIALS.length];
+  }
+
+  const totalWears = items.reduce((sum, i) => sum + (i.wornCount ?? 0), 0);
+  const coats = items.filter((i) => ['coat', 'jacket', 'blazer'].includes(i.category));
+  const tops = items.filter((i) => ['turtleneck', 'shirt', 'tank'].includes(i.category));
+  const footwear = items.filter((i) => ['boots', 'loafer', 'sneaker'].includes(i.category));
+
+  const brandCounts = new Map<string, number>();
+  items.forEach((i) => brandCounts.set(i.brand, (brandCounts.get(i.brand) ?? 0) + 1));
+  const dominantBrand = [...brandCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+
+  const personalized: ({ headline: string; body: string } | null)[] = [
+    coats.length > 0 && tops.length > 0
+      ? {
+          headline: 'THE LAYER PROPOSITION',
+          body: `The ${coats[0].name} over the ${tops[0].name}. A conversation in textures that resolves into something inevitable.`,
+        }
+      : null,
+
+    totalWears > 0
+      ? {
+          headline: 'THE WORN ARCHIVE',
+          body: `${totalWears} wear${totalWears === 1 ? '' : 's'} logged across ${items.length} pieces. The most used items reveal what you actually believe in.`,
+        }
+      : null,
+
+    items.length >= 15
+      ? {
+          headline: 'THE EDIT IS COHERENT',
+          body: `${items.length} pieces. Not one unnecessary. The wardrobe has reached a density that makes choice effortless.`,
+        }
+      : null,
+
+    dominantBrand && brandCounts.get(dominantBrand)! > 1
+      ? {
+          headline: `THE ${dominantBrand.toUpperCase()} THREAD`,
+          body: `${brandCounts.get(dominantBrand)} pieces from ${dominantBrand}. A loyalty that implies conviction, not collection.`,
+        }
+      : null,
+
+    footwear.length > 0 && coats.length > 0
+      ? {
+          headline: 'FROM GROUND TO COLLAR',
+          body: `${footwear[0].name} anchors the silhouette. ${coats[0].name} closes it. What happens between is entirely yours.`,
+        }
+      : null,
+  ];
+
+  const valid = personalized.filter(Boolean) as { headline: string; body: string }[];
+  const pool = [...valid, ...FALLBACK_EDITORIALS];
+  return pool[day % pool.length];
+}
 
 export const CuratorWidget: React.FC = () => {
-  const editorial = getEditorial();
+  const items = useWardrobeStore((s) => s.items);
+  const editorial = getPersonalizedEditorial(items);
 
   return (
     <View style={styles.container}>
