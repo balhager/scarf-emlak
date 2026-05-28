@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Vestiarch",
+    "slug": "vestiarch",
+    "version": "1.0.0",
+    "scheme": "vestiarch",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.vestiarch.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "package": "com.vestiarch.app"
+    },
+    "plugins": [
+      "expo-router",
+      "react-native-reanimated"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
