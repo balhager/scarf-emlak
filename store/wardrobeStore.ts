@@ -25,6 +25,7 @@ export interface WardrobeItem {
   color: string;
   imageUri: string;
   addedAt: number;
+  wornCount?: number;
 }
 
 const DUMMY_ITEMS: WardrobeItem[] = [
@@ -214,6 +215,7 @@ interface WardrobeState {
   items: WardrobeItem[];
   addItem: (item: WardrobeItem) => void;
   removeItem: (id: string) => void;
+  markAsWorn: (id: string) => void;
 }
 
 export const useWardrobeStore = create<WardrobeState>()(
@@ -222,6 +224,12 @@ export const useWardrobeStore = create<WardrobeState>()(
       items: DUMMY_ITEMS,
       addItem: (item) => set((s) => ({ items: [item, ...s.items] })),
       removeItem: (id) => set((s) => ({ items: s.items.filter((i) => i.id !== id) })),
+      markAsWorn: (id) =>
+        set((s) => ({
+          items: s.items.map((i) =>
+            i.id === id ? { ...i, wornCount: (i.wornCount ?? 0) + 1 } : i
+          ),
+        })),
     }),
     {
       name: 'wardrobe-storage',

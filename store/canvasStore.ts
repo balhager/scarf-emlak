@@ -102,7 +102,13 @@ export const useCanvasStore = create<CanvasState>()(
 
       loadLook: (lookId) => {
         const look = get().savedLooks.find((l) => l.id === lookId);
-        if (look) set({ items: [...look.items], activeItemId: null });
+        if (!look) return;
+        // Regenerate IDs so React always remounts CanvasItem components
+        const freshItems = look.items.map((i) => ({
+          ...i,
+          id: `ci-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        }));
+        set({ items: freshItems, activeItemId: null });
       },
 
       deleteLook: (lookId) =>
