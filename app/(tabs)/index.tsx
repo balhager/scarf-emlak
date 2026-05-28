@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useMemo, useRef } from 'react';
+import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ import { ItemDetailSheet } from '@/components/neo-luxury/ItemDetailSheet';
 import { BottomSheet } from '@/components/neo-luxury/BottomSheet';
 import { useWardrobeStore, type WardrobeItem } from '@/store/wardrobeStore';
 import { useCanvasStore } from '@/store/canvasStore';
-import { Colors, Typography, Spacing } from '@/constants/theme';
+import { Colors, Typography, Spacing, Animation } from '@/constants/theme';
 import { useHaptics } from '@/hooks/useHaptics';
 
 const CARD_HEIGHTS = [220, 280, 240, 300, 210, 260];
@@ -33,8 +33,8 @@ const CARD_HEIGHTS = [220, 280, 240, 300, 210, 260];
 type SortKey = 'recent' | 'brand' | 'worn';
 const SORT_OPTIONS: { key: SortKey; label: string; sub: string }[] = [
   { key: 'recent', label: 'RECENTLY ADDED', sub: 'Newest items first' },
-  { key: 'brand', label: 'BRAND A—Z', sub: 'Alphabetical by designer' },
-  { key: 'worn', label: 'MOST WORN', sub: 'By wear count' },
+  { key: 'brand',  label: 'BRAND A—Z',      sub: 'Alphabetical by designer' },
+  { key: 'worn',   label: 'MOST WORN',       sub: 'By wear count' },
 ];
 
 const OUTFIT_GROUPS = [
@@ -53,33 +53,40 @@ export default function VaultScreen() {
   const addToCanvas = useCanvasStore((s) => s.addToCanvas);
   const clearCanvas = useCanvasStore((s) => s.clearCanvas);
 
-  const [searching, setSearching] = useState(false);
+  const [searching, setSearching]   = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterGroup>(FILTER_GROUPS[0]);
-  const [selectedItem, setSelectedItem] = useState<WardrobeItem | null>(null);
+  // Store only the selected ID; the sheet reads the live item from the store,
+  // so markAsWorn updates reflect immediately without closing the sheet.
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>('recent');
   const [sortOpen, setSortOpen] = useState(false);
 
   const inputRef = useRef<TextInput>(null);
-  const searchBarHeight = useSharedValue(0);
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchBarHeight  = useSharedValue(0);
   const searchBarOpacity = useSharedValue(0);
-  const logoOpacity = useSharedValue(1);
+  const logoOpacity      = useSharedValue(1);
+
+  // Cleanup focus timer on unmount
+  useEffect(() => () => { if (focusTimer.current) clearTimeout(focusTimer.current); }, []);
 
   const openSearch = useCallback(() => {
     setSearching(true);
-    searchBarHeight.value = withSpring(50, { damping: 18, stiffness: 200 });
-    searchBarOpacity.value = withTiming(1, { duration: 200 });
-    logoOpacity.value = withTiming(0.3, { duration: 150 });
-    setTimeout(() => inputRef.current?.focus(), 100);
+    searchBarHeight.value  = withSpring(50, Animation.spring);
+    searchBarOpacity.value = withTiming(1, { duration: Animation.normal });
+    logoOpacity.value      = withTiming(0.3, { duration: Animation.fast });
+    focusTimer.current = setTimeout(() => inputRef.current?.focus(), 100);
   }, []);
 
   const closeSearch = useCallback(() => {
     setSearching(false);
     setSearchQuery('');
     Keyboard.dismiss();
-    searchBarHeight.value = withSpring(0, { damping: 18, stiffness: 200 });
-    searchBarOpacity.value = withTiming(0, { duration: 150 });
-    logoOpacity.value = withTiming(1, { duration: 200 });
+    searchBarHeight.value  = withSpring(0, Animation.spring);
+    searchBarOpacity.value = withTiming(0, { duration: Animation.fast });
+    logoOpacity.value      = withTiming(1, { duration: Animation.normal });
   }, []);
 
   const searchBarStyle = useAnimatedStyle(() => ({
@@ -87,10 +94,7 @@ export default function VaultScreen() {
     opacity: searchBarOpacity.value,
     overflow: 'hidden',
   }));
-
-  const logoStyle = useAnimatedStyle(() => ({
-    opacity: logoOpacity.value,
-  }));
+  const logoStyle = useAnimatedStyle(() => ({ opacity: logoOpacity.value }));
 
   const filteredItems = useMemo(() => {
     let result = allItems;
@@ -117,6 +121,12 @@ export default function VaultScreen() {
     return arr;
   }, [filteredItems, sortBy]);
 
+  // Live item from store — reflects markAsWorn updates instantly
+  const selectedItem = useMemo(
+    () => allItems.find((i) => i.id === selectedItemId) ?? null,
+    [allItems, selectedItemId]
+  );
+
   const handleShuffle = useCallback(() => {
     haptics.heavy();
     clearCanvas();
@@ -129,7 +139,7 @@ export default function VaultScreen() {
       added++;
     });
     if (added > 0) router.navigate('/(tabs)/canvas');
-  }, [allItems, addToCanvas, clearCanvas]);
+  }, [allItems, addToCanvas, clearCanvas, haptics]);
 
   const getCardHeight = (index: number) => CARD_HEIGHTS[index % CARD_HEIGHTS.length];
   const data: ListItem[] = [{ _type: 'header' }, ...sortedItems];
@@ -137,11 +147,12 @@ export default function VaultScreen() {
   const renderItem = useCallback(
     ({ item, index }: { item: ListItem; index: number }) => {
       if ('_type' in item) return <CuratorWidget />;
+      const wardrobeItem = item as WardrobeItem;
       return (
         <WardrobeCard
-          item={item as WardrobeItem}
+          item={wardrobeItem}
           height={getCardHeight(index - 1)}
-          onLongPress={setSelectedItem}
+          onPress={(i) => setSelectedItemId(i.id)}
         />
       );
     },
@@ -157,13 +168,13 @@ export default function VaultScreen() {
         <Animated.Text style={[styles.logo, logoStyle]}>V—ARCH</Animated.Text>
         <View style={styles.headerRight}>
           <Text style={styles.itemCount}>{sortedItems.length}</Text>
-          <Pressable onPress={handleShuffle} style={styles.iconBtn} hitSlop={6}>
+          <Pressable onPress={handleShuffle} style={styles.iconBtn} hitSlop={Spacing.sm}>
             <Shuffle size={15} color={Colors.muted} strokeWidth={1.5} />
           </Pressable>
           <Pressable
             onPress={() => { setSortOpen(true); haptics.light(); }}
             style={styles.iconBtn}
-            hitSlop={6}
+            hitSlop={Spacing.sm}
           >
             <SlidersHorizontal
               size={15}
@@ -174,7 +185,7 @@ export default function VaultScreen() {
           <Pressable
             onPress={searching ? closeSearch : openSearch}
             style={styles.iconBtn}
-            hitSlop={6}
+            hitSlop={Spacing.sm}
           >
             {searching
               ? <X size={15} color={Colors.muted} strokeWidth={1.5} />
@@ -215,13 +226,14 @@ export default function VaultScreen() {
         keyExtractor={(item) => ('_type' in item ? 'header' : (item as WardrobeItem).id)}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>NO ITEMS FOUND</Text>
+            <Text style={styles.emptyTitle}>WARDROBE EMPTY</Text>
+            <Text style={styles.emptyHint}>ADD YOUR FIRST PIECE VIA THE + TAB</Text>
           </View>
         }
       />
 
-      {/* Item Detail Sheet */}
-      <ItemDetailSheet item={selectedItem} onClose={() => setSelectedItem(null)} />
+      {/* Item Detail Sheet — reads live item so wornCount updates in real time */}
+      <ItemDetailSheet item={selectedItem} onClose={() => setSelectedItemId(null)} />
 
       {/* Sort Sheet */}
       <BottomSheet open={sortOpen} onClose={() => setSortOpen(false)} snapHeight={290}>
@@ -230,22 +242,16 @@ export default function VaultScreen() {
           {SORT_OPTIONS.map((opt) => (
             <Pressable
               key={opt.key}
-              onPress={() => {
-                setSortBy(opt.key);
-                setSortOpen(false);
-                haptics.selection();
-              }}
+              onPress={() => { setSortBy(opt.key); setSortOpen(false); haptics.selection(); }}
               style={styles.sortOption}
             >
-              <View style={styles.sortOptionLeft}>
-                <Text style={[styles.sortOptionLabel, sortBy === opt.key && styles.sortOptionActive]}>
+              <View>
+                <Text style={[styles.sortLabel, sortBy === opt.key && styles.sortLabelActive]}>
                   {opt.label}
                 </Text>
-                <Text style={styles.sortOptionSub}>{opt.sub}</Text>
+                <Text style={styles.sortSub}>{opt.sub}</Text>
               </View>
-              {sortBy === opt.key && (
-                <View style={styles.sortDot} />
-              )}
+              {sortBy === opt.key && <View style={styles.sortDot} />}
             </Pressable>
           ))}
         </View>
@@ -288,8 +294,13 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.md,
     paddingBottom: 120,
   },
-  emptyState: { paddingTop: 80, alignItems: 'center' },
-  emptyText: { ...Typography.label, opacity: 0.25 },
+  emptyState: {
+    paddingTop: 100,
+    alignItems: 'center',
+    gap: 10,
+  },
+  emptyTitle: { ...Typography.label, color: Colors.white, opacity: 0.2, fontSize: 12 },
+  emptyHint: { ...Typography.label, opacity: 0.15, fontSize: 8 },
   sortSheet: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
@@ -307,14 +318,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
-  sortOptionLeft: { gap: 4 },
-  sortOptionLabel: { ...Typography.label, fontSize: 11, color: Colors.muted },
-  sortOptionActive: { color: Colors.white },
-  sortOptionSub: { ...Typography.label, fontSize: 8, opacity: 0.4 },
-  sortDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.accent,
-  },
+  sortLabel: { ...Typography.label, fontSize: 11, color: Colors.muted },
+  sortLabelActive: { color: Colors.white },
+  sortSub: { ...Typography.label, fontSize: 8, opacity: 0.4, marginTop: 3 },
+  sortDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.accent },
 });

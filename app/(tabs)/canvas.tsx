@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Dimensions,
-  ScrollView,
   Pressable,
   TextInput,
   Alert,
@@ -13,7 +12,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { RotateCcw, Bookmark, Trash2 } from 'lucide-react-native';
+import { FlashList } from '@shopify/flash-list';
+import { RotateCcw, Bookmark } from 'lucide-react-native';
 import { CanvasItem } from '@/components/neo-luxury/CanvasItem';
 import { BottomSheet } from '@/components/neo-luxury/BottomSheet';
 import { useCanvasStore, type SavedLook } from '@/store/canvasStore';
@@ -30,13 +30,13 @@ export default function CanvasScreen() {
   const insets = useSafeAreaInsets();
   const haptics = useHaptics();
 
-  const canvasItems = useCanvasStore((s) => s.items);
-  const savedLooks = useCanvasStore((s) => s.savedLooks);
-  const addToCanvas = useCanvasStore((s) => s.addToCanvas);
-  const clearCanvas = useCanvasStore((s) => s.clearCanvas);
-  const saveLook = useCanvasStore((s) => s.saveLook);
-  const loadLook = useCanvasStore((s) => s.loadLook);
-  const deleteLook = useCanvasStore((s) => s.deleteLook);
+  const canvasItems   = useCanvasStore((s) => s.items);
+  const savedLooks    = useCanvasStore((s) => s.savedLooks);
+  const addToCanvas   = useCanvasStore((s) => s.addToCanvas);
+  const clearCanvas   = useCanvasStore((s) => s.clearCanvas);
+  const saveLook      = useCanvasStore((s) => s.saveLook);
+  const loadLook      = useCanvasStore((s) => s.loadLook);
+  const deleteLook    = useCanvasStore((s) => s.deleteLook);
   const wardrobeItems = useWardrobeStore((s) => s.items);
 
   const [saveSheetOpen, setSaveSheetOpen] = useState(false);
@@ -47,7 +47,7 @@ export default function CanvasScreen() {
       haptics.medium();
       addToCanvas(item.id, item.imageUri);
     },
-    [addToCanvas]
+    [addToCanvas, haptics]
   );
 
   const handleClear = useCallback(() => {
@@ -56,7 +56,7 @@ export default function CanvasScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Clear', style: 'destructive', onPress: () => { haptics.heavy(); clearCanvas(); } },
     ]);
-  }, [canvasItems.length, clearCanvas]);
+  }, [canvasItems.length, clearCanvas, haptics]);
 
   const handleSaveLook = useCallback(() => {
     const name = lookName.trim() || 'Untitled Look';
@@ -64,7 +64,7 @@ export default function CanvasScreen() {
     setLookName('');
     setSaveSheetOpen(false);
     haptics.medium();
-  }, [lookName, saveLook]);
+  }, [lookName, saveLook, haptics]);
 
   const handleLoadLook = useCallback(
     (look: SavedLook) => {
@@ -79,7 +79,7 @@ export default function CanvasScreen() {
         },
       ]);
     },
-    [loadLook]
+    [loadLook, haptics]
   );
 
   const handleDeleteLook = useCallback(
@@ -89,21 +89,39 @@ export default function CanvasScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            haptics.heavy();
-            deleteLook(look.id);
-          },
+          onPress: () => { haptics.heavy(); deleteLook(look.id); },
         },
       ]);
     },
-    [deleteLook]
+    [deleteLook, haptics]
+  );
+
+  const renderThumb = useCallback(
+    ({ item }: { item: WardrobeItem }) => (
+      <Pressable onPress={() => handleAddItem(item)} style={styles.thumbnail}>
+        <Image
+          source={{ uri: item.imageUri }}
+          style={styles.thumbImage}
+          contentFit="cover"
+          transition={200}
+        />
+      </Pressable>
+    ),
+    [handleAddItem]
   );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.logo}>CANVAS</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.logo}>CANVAS</Text>
+          {canvasItems.length > 0 && (
+            <View style={styles.countBadge}>
+              <Text style={styles.countText}>{canvasItems.length}</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.headerActions}>
           <Pressable
             onPress={() => {
@@ -113,8 +131,17 @@ export default function CanvasScreen() {
             }}
             style={styles.headerBtn}
           >
-            <Bookmark size={14} color={canvasItems.length > 0 ? Colors.accent : Colors.muted} strokeWidth={1.5} />
-            <Text style={[styles.headerBtnLabel, canvasItems.length > 0 && { color: Colors.accent }]}>
+            <Bookmark
+              size={14}
+              color={canvasItems.length > 0 ? Colors.accent : Colors.muted}
+              strokeWidth={1.5}
+            />
+            <Text
+              style={[
+                styles.headerBtnLabel,
+                canvasItems.length > 0 && { color: Colors.accent },
+              ]}
+            >
               SAVE
             </Text>
           </Pressable>
@@ -142,24 +169,20 @@ export default function CanvasScreen() {
 
       <View style={styles.divider} />
 
-      <ScrollView
-        style={{ flex: 1 }}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
-        bounces={false}
-      >
-        {/* Saved Looks */}
-        {savedLooks.length > 0 && (
-          <View style={styles.section}>
+      {/* Saved Looks Strip */}
+      {savedLooks.length > 0 && (
+        <>
+          <View style={styles.stripSection}>
             <Text style={styles.sectionLabel}>SAVED LOOKS</Text>
-            <ScrollView
+            <FlashList
               horizontal
+              data={savedLooks}
+              keyExtractor={(l) => l.id}
+              estimatedItemSize={LOOK_CARD_SIZE + 28}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.looksContent}
-            >
-              {savedLooks.map((look) => (
+              renderItem={({ item: look }) => (
                 <Pressable
-                  key={look.id}
                   onPress={() => handleLoadLook(look)}
                   onLongPress={() => handleDeleteLook(look)}
                   delayLongPress={500}
@@ -170,48 +193,33 @@ export default function CanvasScreen() {
                       <Image
                         key={i}
                         source={{ uri }}
-                        style={[
-                          styles.lookThumb,
-                          { left: i * 18, zIndex: i },
-                        ]}
+                        style={[styles.lookThumb, { left: i * 18, zIndex: i }]}
                         contentFit="cover"
                       />
                     ))}
                   </View>
-                  <Text style={styles.lookName} numberOfLines={1}>
-                    {look.name}
-                  </Text>
+                  <Text style={styles.lookName} numberOfLines={1}>{look.name}</Text>
                 </Pressable>
-              ))}
-            </ScrollView>
+              )}
+            />
           </View>
-        )}
+          <View style={styles.divider} />
+        </>
+      )}
 
-        {/* Wardrobe Strip */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>WARDROBE</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.wardrobeContent}
-          >
-            {wardrobeItems.map((item) => (
-              <Pressable
-                key={item.id}
-                onPress={() => handleAddItem(item)}
-                style={styles.thumbnail}
-              >
-                <Image
-                  source={{ uri: item.imageUri }}
-                  style={styles.thumbImage}
-                  contentFit="cover"
-                  transition={200}
-                />
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      </ScrollView>
+      {/* Wardrobe Strip — FlashList horizontal for better performance */}
+      <View style={styles.stripSection}>
+        <Text style={styles.sectionLabel}>WARDROBE</Text>
+        <FlashList
+          horizontal
+          data={wardrobeItems}
+          keyExtractor={(i) => i.id}
+          estimatedItemSize={THUMB_SIZE + 8}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.wardrobeContent}
+          renderItem={renderThumb}
+        />
+      </View>
 
       {/* Save Look Sheet */}
       <BottomSheet
@@ -234,6 +242,7 @@ export default function CanvasScreen() {
             autoFocus
             returnKeyType="done"
             onSubmitEditing={handleSaveLook}
+            maxLength={40}
           />
           <Pressable style={styles.saveBtn} onPress={handleSaveLook}>
             <Text style={styles.saveBtnText}>SAVE LOOK</Text>
@@ -255,7 +264,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   logo: { ...Typography.logo },
+  countBadge: {
+    backgroundColor: Colors.accent,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  countText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.background,
+    letterSpacing: 0.5,
+  },
   headerActions: { flexDirection: 'row', gap: 20 },
   headerBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   headerBtnLabel: { ...Typography.label, color: Colors.muted },
@@ -273,22 +295,23 @@ const styles = StyleSheet.create({
   emptyTitle: {
     ...Typography.label,
     color: Colors.muted,
-    opacity: 0.3,
+    opacity: 0.25,
     fontSize: 14,
     letterSpacing: 4,
   },
-  emptyHint: { ...Typography.label, opacity: 0.2, fontSize: 8 },
+  emptyHint: { ...Typography.label, opacity: 0.18, fontSize: 8 },
   divider: { height: StyleSheet.hairlineWidth, backgroundColor: Colors.border },
-  section: { paddingTop: Spacing.md },
+  stripSection: { paddingTop: Spacing.sm, paddingBottom: Spacing.sm },
   sectionLabel: {
     ...Typography.label,
     paddingHorizontal: Spacing.md,
     marginBottom: 10,
   },
-  looksContent: { paddingHorizontal: Spacing.md, gap: 10 },
+  looksContent: { paddingHorizontal: Spacing.md },
   lookCard: {
     alignItems: 'center',
     width: LOOK_CARD_SIZE + 20,
+    marginRight: 8,
   },
   lookPreview: {
     width: LOOK_CARD_SIZE,
@@ -312,8 +335,9 @@ const styles = StyleSheet.create({
     ...Typography.label,
     fontSize: 8,
     textAlign: 'center',
+    maxWidth: LOOK_CARD_SIZE + 20,
   },
-  wardrobeContent: { paddingHorizontal: Spacing.md, gap: 8 },
+  wardrobeContent: { paddingHorizontal: Spacing.md },
   thumbnail: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
@@ -322,6 +346,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     overflow: 'hidden',
+    marginRight: 8,
   },
   thumbImage: { width: '100%', height: '100%' },
   saveSheet: {

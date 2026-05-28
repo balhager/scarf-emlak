@@ -16,17 +16,17 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useWardrobeStore } from '@/store/wardrobeStore';
 import { useCanvasStore } from '@/store/canvasStore';
-import { Colors, Typography, Spacing } from '@/constants/theme';
+import { Colors, Typography, Spacing, Animation } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
 const BAR_MAX_WIDTH = width - Spacing.md * 2 - 96;
 
 const CATEGORY_GROUPS = [
-  { label: 'OUTERWEAR', categories: ['jacket', 'coat', 'blazer'] },
-  { label: 'TOPS', categories: ['shirt', 'turtleneck', 'tank'] },
-  { label: 'BOTTOMS', categories: ['trouser', 'denim', 'shorts'] },
-  { label: 'FOOTWEAR', categories: ['boots', 'loafer', 'sneaker'] },
-  { label: 'ACCESSORIES', categories: ['bag', 'belt', 'watch'] },
+  { label: 'OUTERWEAR',  categories: ['jacket', 'coat', 'blazer'] },
+  { label: 'TOPS',       categories: ['shirt', 'turtleneck', 'tank'] },
+  { label: 'BOTTOMS',    categories: ['trouser', 'denim', 'shorts'] },
+  { label: 'FOOTWEAR',   categories: ['boots', 'loafer', 'sneaker'] },
+  { label: 'ACCESSORIES',categories: ['bag', 'belt', 'watch'] },
 ];
 
 const AnimatedBar: React.FC<{ pct: number; delay: number }> = ({ pct, delay }) => {
@@ -34,7 +34,7 @@ const AnimatedBar: React.FC<{ pct: number; delay: number }> = ({ pct, delay }) =
   const barStyle = useAnimatedStyle(() => ({ width: barWidth.value }));
 
   useEffect(() => {
-    barWidth.value = withDelay(delay, withTiming(BAR_MAX_WIDTH * pct, { duration: 700 }));
+    barWidth.value = withDelay(delay, withTiming(BAR_MAX_WIDTH * pct, { duration: Animation.slow }));
   }, [pct]);
 
   return (
@@ -48,15 +48,11 @@ const barStyles = StyleSheet.create({
   track: {
     flex: 1,
     height: 2,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    backgroundColor: Colors.borderSubtle,
     borderRadius: 1,
     overflow: 'hidden',
   },
-  fill: {
-    height: '100%',
-    backgroundColor: Colors.accent,
-    borderRadius: 1,
-  },
+  fill: { height: '100%', backgroundColor: Colors.accent, borderRadius: 1 },
 });
 
 const StatCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
@@ -74,31 +70,37 @@ export default function ProfileScreen() {
   const stats = useMemo(() => {
     if (items.length === 0) return null;
 
-    const brands = [...new Set(items.map((i) => i.brand))];
+    // Single pass for brand counts and total wears
+    const brandMap = new Map<string, number>();
+    let totalWears = 0;
+    items.forEach((i) => {
+      brandMap.set(i.brand, (brandMap.get(i.brand) ?? 0) + 1);
+      totalWears += i.wornCount ?? 0;
+    });
 
-    const brandCounts = brands
-      .map((b) => ({ name: b, count: items.filter((i) => i.brand === b).length }))
+    const brandCounts = [...brandMap.entries()]
+      .map(([name, count]) => ({ name, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
 
-    const categoryBreakdown = CATEGORY_GROUPS.map((g) => {
-      const count = items.filter((i) => (g.categories as string[]).includes(i.category)).length;
-      return { label: g.label, count };
-    });
+    const categoryBreakdown = CATEGORY_GROUPS.map((g) => ({
+      label: g.label,
+      count: items.filter((i) => (g.categories as string[]).includes(i.category)).length,
+    }));
     const maxCat = Math.max(...categoryBreakdown.map((c) => c.count), 1);
 
-    const totalWears = items.reduce((sum, i) => sum + (i.wornCount ?? 0), 0);
     const mostWorn = [...items]
       .filter((i) => (i.wornCount ?? 0) > 0)
       .sort((a, b) => (b.wornCount ?? 0) - (a.wornCount ?? 0))
       .slice(0, 5);
 
     const recent = [...items].sort((a, b) => b.addedAt - a.addedAt).slice(0, 5);
-    const oldest = [...items].sort((a, b) => a.addedAt - b.addedAt)[0];
-    const wardrobeAgeDays = Math.round((Date.now() - oldest.addedAt) / 86400000);
+
+    const oldestAddedAt = Math.min(...items.map((i) => i.addedAt));
+    const wardrobeAgeDays = Math.max(0, Math.round((Date.now() - oldestAddedAt) / 86400000));
 
     return {
-      brands,
+      totalBrands: brandMap.size,
       brandCounts,
       categoryBreakdown,
       maxCat,
@@ -108,6 +110,23 @@ export default function ProfileScreen() {
       wardrobeAgeDays,
     };
   }, [items]);
+
+  // Empty state
+  if (items.length === 0) {
+    return (
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <Text style={styles.logo}>PROFILE</Text>
+        </View>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyTitle}>THE WARDROBE</Text>
+          <Text style={styles.emptyHint}>
+            ADD YOUR FIRST PIECE VIA THE + TAB{'\n'}TO BEGIN BUILDING YOUR COLLECTION
+          </Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -121,16 +140,13 @@ export default function ProfileScreen() {
       >
         {/* Stats Grid */}
         <View style={styles.statsGrid}>
-          <StatCard label="PIECES" value={items.length.toString()} />
-          <StatCard label="BRANDS" value={stats ? stats.brands.length.toString() : '0'} />
+          <StatCard label="PIECES"      value={items.length.toString()} />
+          <StatCard label="BRANDS"      value={stats ? stats.totalBrands.toString() : '0'} />
           <StatCard label="LOOKS SAVED" value={savedLooks.length.toString()} />
-          <StatCard
-            label="TOTAL WEARS"
-            value={stats ? stats.totalWears.toString() : '0'}
-          />
+          <StatCard label="TOTAL WEARS" value={stats ? stats.totalWears.toString() : '0'} />
         </View>
 
-        {/* Most Worn — only if any item has been worn */}
+        {/* Most Worn */}
         {stats && stats.mostWorn.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>MOST WORN</Text>
@@ -141,7 +157,7 @@ export default function ProfileScreen() {
             >
               {stats.mostWorn.map((item) => (
                 <View key={item.id} style={styles.recentCard}>
-                  <View style={{ position: 'relative' }}>
+                  <View>
                     <Image
                       source={{ uri: item.imageUri }}
                       style={styles.recentImage}
@@ -205,7 +221,7 @@ export default function ProfileScreen() {
             <Text style={styles.sectionTitle}>TOP BRANDS</Text>
             {stats.brandCounts.map((b, i) => (
               <View key={b.name} style={styles.brandRow}>
-                <Text style={styles.brandRank}>0{i + 1}</Text>
+                <Text style={styles.brandRank}>{String(i + 1).padStart(2, '0')}</Text>
                 <Text style={styles.brandName}>{b.name}</Text>
                 <Text style={styles.brandCount}>
                   {b.count} {b.count === 1 ? 'PIECE' : 'PIECES'}
@@ -215,12 +231,14 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Wardrobe Age */}
+        {/* Wardrobe Age Hero */}
         {stats && (
           <View style={styles.ageBlock}>
             <Text style={styles.ageLabel}>WARDROBE AGE</Text>
             <Text style={styles.ageValue}>{stats.wardrobeAgeDays}</Text>
-            <Text style={styles.ageDaysLabel}>DAYS OF CURATION</Text>
+            <Text style={styles.ageDaysLabel}>
+              {stats.wardrobeAgeDays === 1 ? 'DAY' : 'DAYS'} OF CURATION
+            </Text>
           </View>
         )}
 
@@ -242,13 +260,32 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   logo: { ...Typography.logo },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: Spacing.xl,
+  },
+  emptyTitle: {
+    ...Typography.logo,
+    opacity: 0.15,
+    fontSize: 20,
+  },
+  emptyHint: {
+    ...Typography.label,
+    opacity: 0.25,
+    fontSize: 9,
+    textAlign: 'center',
+    lineHeight: 16,
+  },
   scrollContent: { paddingBottom: 140 },
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.lg,
-    gap: 1,
+    gap: StyleSheet.hairlineWidth,
   },
   statCard: {
     width: '50%',
@@ -257,7 +294,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
-    marginBottom: -StyleSheet.hairlineWidth,
   },
   statValue: {
     fontSize: 32,
@@ -355,12 +391,13 @@ const styles = StyleSheet.create({
   brandCount: { ...Typography.label, fontSize: 9 },
   ageBlock: {
     marginTop: Spacing.xxl,
-    paddingHorizontal: Spacing.md,
+    marginHorizontal: Spacing.md,
     alignItems: 'center',
     paddingVertical: Spacing.xl,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: Colors.border,
-    marginHorizontal: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
   ageLabel: { ...Typography.label, marginBottom: Spacing.sm },
   ageValue: {
