@@ -19,7 +19,7 @@ import { useCanvasStore } from '@/store/canvasStore';
 import { Colors, Typography, Spacing } from '@/constants/theme';
 
 const { width } = Dimensions.get('window');
-const BAR_MAX_WIDTH = width - Spacing.md * 2 - 80;
+const BAR_MAX_WIDTH = width - Spacing.md * 2 - 96;
 
 const CATEGORY_GROUPS = [
   { label: 'OUTERWEAR', categories: ['jacket', 'coat', 'blazer'] },
@@ -46,8 +46,8 @@ const AnimatedBar: React.FC<{ pct: number; delay: number }> = ({ pct, delay }) =
 
 const barStyles = StyleSheet.create({
   track: {
-    height: 2,
     flex: 1,
+    height: 2,
     backgroundColor: 'rgba(255,255,255,0.06)',
     borderRadius: 1,
     overflow: 'hidden',
@@ -58,6 +58,13 @@ const barStyles = StyleSheet.create({
     borderRadius: 1,
   },
 });
+
+const StatCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <View style={styles.statCard}>
+    <Text style={styles.statValue}>{value}</Text>
+    <Text style={styles.statLabel}>{label}</Text>
+  </View>
+);
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -80,13 +87,26 @@ export default function ProfileScreen() {
     });
     const maxCat = Math.max(...categoryBreakdown.map((c) => c.count), 1);
 
-    const sorted = [...items].sort((a, b) => b.addedAt - a.addedAt);
-    const recent = sorted.slice(0, 5);
+    const totalWears = items.reduce((sum, i) => sum + (i.wornCount ?? 0), 0);
+    const mostWorn = [...items]
+      .filter((i) => (i.wornCount ?? 0) > 0)
+      .sort((a, b) => (b.wornCount ?? 0) - (a.wornCount ?? 0))
+      .slice(0, 5);
 
+    const recent = [...items].sort((a, b) => b.addedAt - a.addedAt).slice(0, 5);
     const oldest = [...items].sort((a, b) => a.addedAt - b.addedAt)[0];
     const wardrobeAgeDays = Math.round((Date.now() - oldest.addedAt) / 86400000);
 
-    return { brands, brandCounts, categoryBreakdown, maxCat, recent, wardrobeAgeDays };
+    return {
+      brands,
+      brandCounts,
+      categoryBreakdown,
+      maxCat,
+      totalWears,
+      mostWorn,
+      recent,
+      wardrobeAgeDays,
+    };
   }, [items]);
 
   return (
@@ -103,12 +123,42 @@ export default function ProfileScreen() {
         <View style={styles.statsGrid}>
           <StatCard label="PIECES" value={items.length.toString()} />
           <StatCard label="BRANDS" value={stats ? stats.brands.length.toString() : '0'} />
-          <StatCard label="LOOKS" value={savedLooks.length.toString()} />
+          <StatCard label="LOOKS SAVED" value={savedLooks.length.toString()} />
           <StatCard
-            label="WARDROBE AGE"
-            value={stats ? `${stats.wardrobeAgeDays}D` : '0D'}
+            label="TOTAL WEARS"
+            value={stats ? stats.totalWears.toString() : '0'}
           />
         </View>
+
+        {/* Most Worn — only if any item has been worn */}
+        {stats && stats.mostWorn.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>MOST WORN</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.recentContent}
+            >
+              {stats.mostWorn.map((item) => (
+                <View key={item.id} style={styles.recentCard}>
+                  <View style={{ position: 'relative' }}>
+                    <Image
+                      source={{ uri: item.imageUri }}
+                      style={styles.recentImage}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                    <View style={styles.wornOverlay}>
+                      <Text style={styles.wornOverlayText}>×{item.wornCount}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.recentBrand} numberOfLines={1}>{item.brand}</Text>
+                  <Text style={styles.recentName} numberOfLines={1}>{item.name}</Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Category Breakdown */}
         {stats && (
@@ -124,7 +174,7 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Recent Additions */}
+        {/* Recently Added */}
         {stats && stats.recent.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>RECENTLY ADDED</Text>
@@ -141,12 +191,8 @@ export default function ProfileScreen() {
                     contentFit="cover"
                     transition={200}
                   />
-                  <Text style={styles.recentBrand} numberOfLines={1}>
-                    {item.brand}
-                  </Text>
-                  <Text style={styles.recentName} numberOfLines={1}>
-                    {item.name}
-                  </Text>
+                  <Text style={styles.recentBrand} numberOfLines={1}>{item.brand}</Text>
+                  <Text style={styles.recentName} numberOfLines={1}>{item.name}</Text>
                 </View>
               ))}
             </ScrollView>
@@ -161,13 +207,23 @@ export default function ProfileScreen() {
               <View key={b.name} style={styles.brandRow}>
                 <Text style={styles.brandRank}>0{i + 1}</Text>
                 <Text style={styles.brandName}>{b.name}</Text>
-                <Text style={styles.brandCount}>{b.count} {b.count === 1 ? 'PIECE' : 'PIECES'}</Text>
+                <Text style={styles.brandCount}>
+                  {b.count} {b.count === 1 ? 'PIECE' : 'PIECES'}
+                </Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* Signature */}
+        {/* Wardrobe Age */}
+        {stats && (
+          <View style={styles.ageBlock}>
+            <Text style={styles.ageLabel}>WARDROBE AGE</Text>
+            <Text style={styles.ageValue}>{stats.wardrobeAgeDays}</Text>
+            <Text style={styles.ageDaysLabel}>DAYS OF CURATION</Text>
+          </View>
+        )}
+
         <View style={styles.signature}>
           <Text style={styles.signatureText}>V—ARCH</Text>
           <Text style={styles.signatureSubtext}>THE DIGITAL WARDROBE</Text>
@@ -176,13 +232,6 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-const StatCard: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <View style={styles.statCard}>
-    <Text style={styles.statValue}>{value}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
@@ -208,7 +257,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
-    alignItems: 'flex-start',
     marginBottom: -StyleSheet.hairlineWidth,
   },
   statValue: {
@@ -234,11 +282,7 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     gap: 12,
   },
-  barLabel: {
-    ...Typography.label,
-    fontSize: 8,
-    width: 80,
-  },
+  barLabel: { ...Typography.label, fontSize: 8, width: 88 },
   barCount: {
     ...Typography.label,
     fontSize: 9,
@@ -259,6 +303,23 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 130,
     backgroundColor: Colors.background,
+  },
+  wornOverlay: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.accent,
+  },
+  wornOverlayText: {
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 1,
+    color: Colors.accent,
   },
   recentBrand: {
     ...Typography.label,
@@ -283,12 +344,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     gap: 14,
   },
-  brandRank: {
-    ...Typography.label,
-    color: Colors.accent,
-    fontSize: 9,
-    width: 24,
-  },
+  brandRank: { ...Typography.label, color: Colors.accent, fontSize: 9, width: 24 },
   brandName: {
     flex: 1,
     fontSize: 14,
@@ -297,19 +353,29 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
   brandCount: { ...Typography.label, fontSize: 9 },
+  ageBlock: {
+    marginTop: Spacing.xxl,
+    paddingHorizontal: Spacing.md,
+    alignItems: 'center',
+    paddingVertical: Spacing.xl,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+    marginHorizontal: Spacing.md,
+  },
+  ageLabel: { ...Typography.label, marginBottom: Spacing.sm },
+  ageValue: {
+    fontSize: 64,
+    fontWeight: '100',
+    color: Colors.white,
+    letterSpacing: -2,
+    lineHeight: 72,
+  },
+  ageDaysLabel: { ...Typography.label, opacity: 0.35, marginTop: 4 },
   signature: {
     alignItems: 'center',
     paddingTop: Spacing.xxl,
     gap: 6,
   },
-  signatureText: {
-    ...Typography.logo,
-    opacity: 0.15,
-    fontSize: 20,
-  },
-  signatureSubtext: {
-    ...Typography.label,
-    opacity: 0.1,
-    fontSize: 8,
-  },
+  signatureText: { ...Typography.logo, opacity: 0.12, fontSize: 20 },
+  signatureSubtext: { ...Typography.label, opacity: 0.08, fontSize: 8 },
 });
