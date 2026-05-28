@@ -4,9 +4,12 @@ export const Colors = {
   accent: '#D4C8B0',
   muted: '#8E8E93',
   border: 'rgba(212, 200, 176, 0.12)',
+  borderSubtle: 'rgba(255, 255, 255, 0.06)',
   overlay: 'rgba(12, 12, 14, 0.72)',
   glass: 'rgba(255, 255, 255, 0.04)',
   white: '#FFFFFF',
+  warning: 'rgba(255, 80, 80, 0.6)',
+  warningBorder: 'rgba(255, 80, 80, 0.25)',
 };
 
 export const Typography = {
@@ -45,4 +48,12 @@ export const Spacing = {
   lg: 24,
   xl: 40,
   xxl: 64,
+};
+
+export const Animation = {
+  fast: 150,
+  normal: 250,
+  slow: 400,
+  spring: { damping: 18, stiffness: 200 },
+  springSnappy: { damping: 22, stiffness: 300 },
 };
