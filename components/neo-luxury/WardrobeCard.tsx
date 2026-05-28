@@ -40,6 +40,8 @@ export const WardrobeCard: React.FC<Props> = ({ item, height, onPress, onLongPre
     onLongPress?.(item);
   }, [item, onLongPress]);
 
+  const wornCount = item.wornCount ?? 0;
+
   return (
     <Animated.View entering={FadeIn.duration(250)} style={[styles.card, animatedStyle]}>
       <Pressable
@@ -50,12 +52,19 @@ export const WardrobeCard: React.FC<Props> = ({ item, height, onPress, onLongPre
         delayLongPress={380}
         style={{ flex: 1 }}
       >
-        <Image
-          source={{ uri: item.imageUri }}
-          style={[styles.image, { height }]}
-          contentFit="cover"
-          transition={300}
-        />
+        <View style={{ position: 'relative' }}>
+          <Image
+            source={{ uri: item.imageUri }}
+            style={[styles.image, { height }]}
+            contentFit="cover"
+            transition={300}
+          />
+          {wornCount > 0 && (
+            <View style={styles.wornBadge}>
+              <Text style={styles.wornBadgeText}>×{wornCount}</Text>
+            </View>
+          )}
+        </View>
         <View style={styles.meta}>
           <Text style={styles.brand}>{item.brand}</Text>
           <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
@@ -79,6 +88,23 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     backgroundColor: Colors.surface,
+  },
+  wornBadge: {
+    position: 'absolute',
+    bottom: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    borderRadius: 2,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: Colors.accent,
+  },
+  wornBadgeText: {
+    fontSize: 9,
+    fontWeight: '600',
+    letterSpacing: 1,
+    color: Colors.accent,
   },
   meta: {
     padding: Spacing.sm,

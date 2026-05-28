@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, Pressable } from 'react-native';
 import { Image } from 'expo-image';
 import Animated, {
   useSharedValue,
@@ -7,8 +7,10 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { X } from 'lucide-react-native';
 import { useCanvasStore, type CanvasItemState } from '@/store/canvasStore';
 import { useHaptics } from '@/hooks/useHaptics';
+import { Colors } from '@/constants/theme';
 
 const ITEM_SIZE = 180;
 
@@ -18,7 +20,8 @@ interface Props {
 
 export const CanvasItem: React.FC<Props> = ({ item }) => {
   const haptics = useHaptics();
-  const { updatePosition, updateScale, bringToFront, setActiveItem } = useCanvasStore();
+  const { updatePosition, updateScale, bringToFront, setActiveItem, removeFromCanvas } =
+    useCanvasStore();
 
   const translateX = useSharedValue(item.x);
   const translateY = useSharedValue(item.y);
@@ -65,35 +68,63 @@ export const CanvasItem: React.FC<Props> = ({ item }) => {
     ],
   }));
 
+  const handleDelete = useCallback(() => {
+    haptics.heavy();
+    removeFromCanvas(item.id);
+  }, [item.id, removeFromCanvas]);
+
   return (
-    <GestureDetector gesture={combinedGesture}>
-      <Animated.View
-        style={[
-          styles.container,
-          animatedStyle,
-          { zIndex: item.zIndex },
-        ]}
-      >
-        <Image
-          source={{ uri: item.imageUri }}
-          style={styles.image}
-          contentFit="contain"
-        />
-      </Animated.View>
-    </GestureDetector>
+    <Animated.View style={[styles.outerContainer, animatedStyle, { zIndex: item.zIndex }]}>
+      <GestureDetector gesture={combinedGesture}>
+        <View style={styles.imageContainer}>
+          <Image source={{ uri: item.imageUri }} style={styles.image} contentFit="contain" />
+        </View>
+      </GestureDetector>
+
+      {/* Delete button — outside GestureDetector so it receives press events */}
+      <Pressable style={styles.deleteBtn} onPress={handleDelete} hitSlop={6}>
+        <View style={styles.deleteDot}>
+          <X size={9} color={Colors.background} strokeWidth={2.5} />
+        </View>
+      </Pressable>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  outerContainer: {
     position: 'absolute',
     width: ITEM_SIZE,
     height: ITEM_SIZE,
     marginLeft: -ITEM_SIZE / 2,
     marginTop: -ITEM_SIZE / 2,
   },
+  imageContainer: {
+    width: ITEM_SIZE,
+    height: ITEM_SIZE,
+  },
   image: {
     width: '100%',
     height: '100%',
+  },
+  deleteBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    zIndex: 10,
+    padding: 2,
+  },
+  deleteDot: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
 });
